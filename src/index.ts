@@ -5,8 +5,7 @@ import { createPathMapByDir, createDirMapByObject } from './mapTool';
 export const name = 'smmcat-selfhelp';
 import { } from 'koishi-plugin-word-core';
 
-export interface Config
-{
+export interface Config {
   mapAddress: string;
   overtime: number;
   debug: boolean;
@@ -33,11 +32,9 @@ export const inject = {
   optional: ['word']
 };
 
-export function apply(ctx: Context, config: Config)
-{
+export function apply(ctx: Context, config: Config) {
   // 模板内容
-  const addTemplate = async (upath) =>
-  {
+  const addTemplate = async (upath) => {
     const obj = [
       {
         name: "1.自助服务",
@@ -67,72 +64,79 @@ export function apply(ctx: Context, config: Config)
           }
         ]
       },
-      { name: "3.说明文档", child: "这是 smmcat-helpself 的默认结构，您可以通过 result.text 文件创建最终给定的回复" }
+      { name: "3.说明文档", child: "这是 smmcat-helpself 的默认结构，您可以通过 result.text 文件创建最终给定的回复" },
+      { name: "4.更新说明", child: "在 0.1.0 版本后，引入了 word-core 可选服务，并设置了%转义符%，例如下面是获取时间：\n%getTime%\n\n目前提供的转义符只有：getTime -> 获取时间 rollACGImg -> 获取随机动漫图" }
     ];
-    try
-    {
+    try {
       await createDirMapByObject(obj, upath);
-    } catch (error)
-    {
+    } catch (error) {
       console.log(error);
     }
   };
+
+  // 转义符工具
+  const transferTool = {
+    getTime(session) {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+    },
+    rollACGImg(session) {
+      return h.image('https://www.dmoe.cc/random.php')
+    }
+  }
+
 
   const selfhelpMap = {
     // 基地址
     upath: path.join(ctx.baseDir, config.mapAddress),
     mapInfo: [],
     // 初始化路径
-    async initPath()
-    {
-      try
-      {
+    async initPath() {
+      try {
         // 是否创建对应内容
         await fs.access(this.upath);
-      } catch (error)
-      {
-        try
-        {
+      } catch (error) {
+        try {
           // 添加演示模板
           await fs.mkdir(this.upath, { recursive: true });
           await addTemplate(this.upath);
-        } catch (error)
-        {
+        } catch (error) {
           console.error(error);
         }
       }
     },
     // 初始化菜单结构
-    async init()
-    {
+    async init() {
       await this.initPath();
       this.mapInfo = createPathMapByDir(this.upath);
       config.debug && console.log(JSON.stringify(this.mapInfo, null, ' '));
       config.debug && console.log("[smmcat-selfhelp]:自助菜单构建完成");
     },
-    getMenu(goal: string, callback?: (event) => void)
-    {
+    getMenu(goal: string, callback?: (event) => void) {
 
       let selectMenu = this.mapInfo;
       let end = false;
       let indePath = [];
       let PathName = [];
-      if (!goal)
-      {
+      if (!goal) {
         callback && callback({ selectMenu, lastPath: '', crumbs: '', end });
         return;
       }
       let title = null;
       const indexList = goal.split('-').map(item => Number(item));
-      indexList.some((item: number) =>
-      {
+      indexList.some((item: number) => {
         // 储存路径值
         indePath.push(item);
         PathName.push(selectMenu[item - 1]?.name.length > 6 ? selectMenu[item - 1]?.name.slice(0, 6) + '...' : selectMenu[item - 1]?.name);
         title = selectMenu[item - 1]?.title || null;
         // 超过范围
-        if (selectMenu.length < item)
-        {
+        if (selectMenu.length < item) {
           selectMenu = undefined;
           // 还原正确路径值
           indePath.pop();
@@ -141,12 +145,10 @@ export function apply(ctx: Context, config: Config)
           return true;
         }
         // 如果是菜单对象列表
-        if (selectMenu && typeof selectMenu === "object")
-        {
+        if (selectMenu && typeof selectMenu === "object") {
           selectMenu = selectMenu[item - 1].child;
           // 如果下级是内容区
-          if (typeof selectMenu === "string")
-          {
+          if (typeof selectMenu === "string") {
             end = true;
             callback && callback({ selectMenu, lastPath: indePath.join('-'), crumbs: PathName.slice(-3).reverse().join('<'), end });
             return true;
@@ -156,28 +158,42 @@ export function apply(ctx: Context, config: Config)
       end || callback && callback({ selectMenu, title, lastPath: indePath.join('-'), crumbs: PathName.reverse().slice(-3).join('<'), end });
     },
     // 菜单渲染到界面
-    markScreen(pathLine: string)
-    {
-      let goalItem = {};
+    markScreen(pathLine: string, session) {
+      let goalItem = {}
       // 查找对应菜单 获取回调
-      this.getMenu(pathLine, (ev: any) =>
-      {
-        goalItem = ev;
-      });
-      return this.format(goalItem);
+      this.getMenu(pathLine, (ev: any) => {
+        // 分析转义符 %type%
+        if (ev.end) {
+          ev.selectMenu = ev.selectMenu.replace(/%([a-z|A-Z]+)%/g, (match, capture) => {
+            let result = ''
+            if (transferTool[capture]) {
+              result = transferTool[capture](session)
+            }
+            return result;
+          });
+        }
+        if (ev.title) {
+          ev.title = ev.title.replace(/%([a-z|A-Z]+)%/g, (match, capture) => {
+            let result = ''
+            if (transferTool[capture]) {
+              result = transferTool[capture](session)
+            }
+            return result;
+          });
+        }
+        goalItem = ev
+      })
+      return this.format(goalItem)
     },
     // 格式化界面输出
-    format(goalItem)
-    {
-      if (!goalItem.selectMenu)
-      {
+    format(goalItem) {
+      if (!goalItem.selectMenu) {
         return {
           msg: '',
           err: true
         };
       }
-      if (goalItem.end)
-      {
+      if (goalItem.end) {
         return {
           msg: goalItem.selectMenu.replace(/\\/g, '') +
             (goalItem.crumbs ? `\n\n[当前位置] ` +
@@ -186,8 +202,7 @@ export function apply(ctx: Context, config: Config)
           err: false,
           end: goalItem.end
         };
-      } else
-      {
+      } else {
         return {
           msg: (goalItem.crumbs ? `[当前位置]\n` + `${goalItem.crumbs}\n` : '主菜单\n') +
             `----------------------------\n` +
@@ -201,23 +216,19 @@ export function apply(ctx: Context, config: Config)
     }
   };
 
-  ctx.on('ready', () =>
-  {
+  ctx.on('ready', () => {
     selfhelpMap.init();
   });
 
   ctx
     .command('自助菜单')
-    .action(async ({ session }) =>
-    {
+    .action(async ({ session }) => {
       const proce = [];
-      while (true)
-      {
-        const data = selfhelpMap.markScreen(proce.join('-'));
-        if (data.err)
-        {
+      while (true) {
+        const data = selfhelpMap.markScreen(proce.join('-'), session);
+        if (data.err) {
           proce.pop();
-          const data = selfhelpMap.markScreen(proce.join('-'));
+          const data = selfhelpMap.markScreen(proce.join('-'), session);
           await session.send('操作不对，请重新输入：\n注意需要输入指定范围的下标');
           await session.send(data.msg);
         }
@@ -225,46 +236,36 @@ export function apply(ctx: Context, config: Config)
         // 原先猫老师的源码
         // await session.send(data.msg)
 
-        if (ctx.word)
-        {
+        if (ctx.word) {
           const msg = await ctx.word.driver.parMsg(data.msg, { saveDB: 'smm' }, session);
-          if (msg)
-          {
+          if (msg) {
             await session.send(msg);
           }
-        } else
-        {
+        } else {
           await session.send(data.msg);
         }
 
         const res = await session.prompt(config.overtime);
-        if (res === undefined)
-        {
-          res == '0' && await session.send('长时间未操作，退出自助服务');
+        if (res === undefined) {
+          await session.send('长时间未操作，退出自助服务');
           break;
         }
-        if (!res.trim() || isNaN(Number(res)) && res.toLowerCase() !== 'q' && res.toLowerCase() !== 'p')
-        {
+        if (!res.trim() || isNaN(Number(res)) && res.toLowerCase() !== 'q' && res.toLowerCase() !== 'p') {
           await session.send('请输入指定序号下标');
           continue;
         }
-        if (res == '0')
-        {
+        if (res == '0') {
           res == '0' && await session.send('已退出自助服务');
           break;
         }
-        if (res.toLowerCase() === 'q')
-        {
+        if (res.toLowerCase() === 'q') {
           proce.pop();
-        } else if (res.toLowerCase() === 'p')
-        {
+        } else if (res.toLowerCase() === 'p') {
           proce.length = 0;
-        } else
-        {
+        } else {
           proce.push(res);
           // 如果已经末尾
-          if (data.end)
-          {
+          if (data.end) {
             await session.send('已经到底了!');
             proce.pop();
           }
