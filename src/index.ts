@@ -1,14 +1,17 @@
-import { Context, Schema, h } from 'koishi'
+import { Context, Schema, h } from 'koishi';
 import fs from 'fs/promises';
 import path from 'path';
-import { createPathMapByDir, createDirMapByObject } from './mapTool'
-export const name = 'smmcat-selfhelp'
+import { createPathMapByDir, createDirMapByObject } from './mapTool';
+export const name = 'smmcat-selfhelp';
+import { } from 'koishi-plugin-word-core';
 
-export interface Config {
-  mapAddress: string
-  overtime: number
-  debug: boolean
+export interface Config
+{
+  mapAddress: string;
+  overtime: number;
+  debug: boolean;
 }
+
 export const usage = `
 通过创建文件夹生成对应映射关系的多级菜单选项的简单自助菜单插件
 
@@ -16,16 +19,25 @@ export const usage = `
  - title.text 中的内容代表该层级菜单的标题
 
 只要上述文件放置在对应文件夹中，就会有对应的效果
-`
+
+当启用[word-core](/market?keyword=word-core)与[word-core-grammar-basic](/market?keyword=word-core-grammar-basic)插件后，可以将回复接入词库解析
+`;
+
 export const Config: Schema<Config> = Schema.object({
   mapAddress: Schema.string().default('./data/selfHelp').description('菜单结构放置位置'),
   overtime: Schema.number().default(30000).description('菜单访问的超时时间'),
   debug: Schema.boolean().default(false).description('日志查看更多信息')
-})
+});
 
-export function apply(ctx: Context, config: Config) {
+export const inject = {
+  optional: ['word']
+};
+
+export function apply(ctx: Context, config: Config)
+{
   // 模板内容
-  const addTemplate = async (upath) => {
+  const addTemplate = async (upath) =>
+  {
     const obj = [
       {
         name: "1.自助服务",
@@ -56,97 +68,116 @@ export function apply(ctx: Context, config: Config) {
         ]
       },
       { name: "3.说明文档", child: "这是 smmcat-helpself 的默认结构，您可以通过 result.text 文件创建最终给定的回复" }
-    ]
-    try {
-      await createDirMapByObject(obj, upath)
-    } catch (error) {
+    ];
+    try
+    {
+      await createDirMapByObject(obj, upath);
+    } catch (error)
+    {
       console.log(error);
     }
-  }
+  };
 
   const selfhelpMap = {
     // 基地址
     upath: path.join(ctx.baseDir, config.mapAddress),
     mapInfo: [],
     // 初始化路径
-    async initPath() {
-      try {
+    async initPath()
+    {
+      try
+      {
         // 是否创建对应内容
         await fs.access(this.upath);
-      } catch (error) {
-        try {
+      } catch (error)
+      {
+        try
+        {
           // 添加演示模板
           await fs.mkdir(this.upath, { recursive: true });
-          await addTemplate(this.upath)
-        } catch (error) {
+          await addTemplate(this.upath);
+        } catch (error)
+        {
           console.error(error);
         }
       }
     },
     // 初始化菜单结构
-    async init() {
-      await this.initPath()
-      this.mapInfo = createPathMapByDir(this.upath)
+    async init()
+    {
+      await this.initPath();
+      this.mapInfo = createPathMapByDir(this.upath);
       config.debug && console.log(JSON.stringify(this.mapInfo, null, ' '));
       config.debug && console.log("[smmcat-selfhelp]:自助菜单构建完成");
     },
-    getMenu(goal: string, callback?: (event) => void) {
+    getMenu(goal: string, callback?: (event) => void)
+    {
 
-      let selectMenu = this.mapInfo
-      let end = false
-      let indePath = []
-      let PathName = []
-      if (!goal) {
-        callback && callback({ selectMenu, lastPath: '', crumbs: '', end })
-        return
+      let selectMenu = this.mapInfo;
+      let end = false;
+      let indePath = [];
+      let PathName = [];
+      if (!goal)
+      {
+        callback && callback({ selectMenu, lastPath: '', crumbs: '', end });
+        return;
       }
-      let title = null
-      const indexList = goal.split('-').map(item => Number(item))
-      indexList.some((item: number) => {
+      let title = null;
+      const indexList = goal.split('-').map(item => Number(item));
+      indexList.some((item: number) =>
+      {
         // 储存路径值
-        indePath.push(item)
-        PathName.push(selectMenu[item - 1]?.name.length > 6 ? selectMenu[item - 1]?.name.slice(0, 6) + '...' : selectMenu[item - 1]?.name)
-        title = selectMenu[item - 1]?.title || null
+        indePath.push(item);
+        PathName.push(selectMenu[item - 1]?.name.length > 6 ? selectMenu[item - 1]?.name.slice(0, 6) + '...' : selectMenu[item - 1]?.name);
+        title = selectMenu[item - 1]?.title || null;
         // 超过范围
-        if (selectMenu.length < item) {
-          selectMenu = undefined
+        if (selectMenu.length < item)
+        {
+          selectMenu = undefined;
           // 还原正确路径值
-          indePath.pop()
-          PathName.pop()
-          callback && callback({ selectMenu, lastPath: indePath.join('-'), crumbs: PathName.slice(-3).reverse().join('<'), end })
-          return true
+          indePath.pop();
+          PathName.pop();
+          callback && callback({ selectMenu, lastPath: indePath.join('-'), crumbs: PathName.slice(-3).reverse().join('<'), end });
+          return true;
         }
         // 如果是菜单对象列表
-        if (selectMenu && typeof selectMenu === "object") {
-          selectMenu = selectMenu[item - 1].child
+        if (selectMenu && typeof selectMenu === "object")
+        {
+          selectMenu = selectMenu[item - 1].child;
           // 如果下级是内容区
-          if (typeof selectMenu === "string") {
-            end = true
-            callback && callback({ selectMenu, lastPath: indePath.join('-'), crumbs: PathName.slice(-3).reverse().join('<'), end })
-            return true
+          if (typeof selectMenu === "string")
+          {
+            end = true;
+            callback && callback({ selectMenu, lastPath: indePath.join('-'), crumbs: PathName.slice(-3).reverse().join('<'), end });
+            return true;
           }
         }
-      })
-      end || callback && callback({ selectMenu, title, lastPath: indePath.join('-'), crumbs: PathName.reverse().slice(-3).join('<'), end })
+      });
+      end || callback && callback({ selectMenu, title, lastPath: indePath.join('-'), crumbs: PathName.reverse().slice(-3).join('<'), end });
     },
     // 菜单渲染到界面
-    markScreen(pathLine: string) {
-      let goalItem = {}
+    markScreen(pathLine: string)
+    {
+      let goalItem = {};
       // 查找对应菜单 获取回调
-      this.getMenu(pathLine, (ev: any) => {
-        goalItem = ev
-      })
-      return this.format(goalItem)
+      this.getMenu(pathLine, (ev: any) =>
+      {
+        goalItem = ev;
+      });
+      return this.format(goalItem);
     },
     // 格式化界面输出
-    format(goalItem) {
-      if (!goalItem.selectMenu) {
+    format(goalItem)
+    {
+      if (!goalItem.selectMenu)
+      {
         return {
           msg: '',
           err: true
-        }
+        };
       }
-      if (goalItem.end) {
+      if (goalItem.end)
+      {
         return {
           msg: goalItem.selectMenu.replace(/\\/g, '') +
             (goalItem.crumbs ? `\n\n[当前位置] ` +
@@ -154,8 +185,9 @@ export function apply(ctx: Context, config: Config) {
             '\n\nQ 上页\nP 首页\n0 退出',
           err: false,
           end: goalItem.end
-        }
-      } else {
+        };
+      } else
+      {
         return {
           msg: (goalItem.crumbs ? `[当前位置]\n` + `${goalItem.crumbs}\n` : '主菜单\n') +
             `----------------------------\n` +
@@ -164,53 +196,79 @@ export function apply(ctx: Context, config: Config) {
             `\n----------------------------\n`,
           err: false,
           end: goalItem.end
-        }
+        };
       }
     }
-  }
+  };
 
-  ctx.on('ready', () => {
-    selfhelpMap.init()
-  })
+  ctx.on('ready', () =>
+  {
+    selfhelpMap.init();
+  });
 
   ctx
     .command('自助菜单')
-    .action(async ({ session }) => {
-      const proce = []
-      while (true) {
-        const data = selfhelpMap.markScreen(proce.join('-'))
-        if (data.err) {
-          proce.pop()
-          const data = selfhelpMap.markScreen(proce.join('-'))
-          await session.send('操作不对，请重新输入：\n注意需要输入指定范围的下标')
-          await session.send(data.msg)
+    .action(async ({ session }) =>
+    {
+      const proce = [];
+      while (true)
+      {
+        const data = selfhelpMap.markScreen(proce.join('-'));
+        if (data.err)
+        {
+          proce.pop();
+          const data = selfhelpMap.markScreen(proce.join('-'));
+          await session.send('操作不对，请重新输入：\n注意需要输入指定范围的下标');
+          await session.send(data.msg);
         }
-        await session.send(data.msg)
-        const res = await session.prompt(config.overtime)
-        if (res === undefined) {
-          res == '0' && await session.send('长时间未操作，退出自助服务')
+
+        // 原先猫老师的源码
+        // await session.send(data.msg)
+
+        if (ctx.word)
+        {
+          const msg = await ctx.word.driver.parMsg(data.msg, { saveDB: 'smm' }, session);
+          if (msg)
+          {
+            await session.send(msg);
+          }
+        } else
+        {
+          await session.send(data.msg);
+        }
+
+        const res = await session.prompt(config.overtime);
+        if (res === undefined)
+        {
+          res == '0' && await session.send('长时间未操作，退出自助服务');
           break;
         }
-        if (!res.trim() || isNaN(Number(res)) && res.toLowerCase() !== 'q' && res.toLowerCase() !== 'p') {
-          await session.send('请输入指定序号下标')
+        if (!res.trim() || isNaN(Number(res)) && res.toLowerCase() !== 'q' && res.toLowerCase() !== 'p')
+        {
+          await session.send('请输入指定序号下标');
           continue;
         }
-        if (res == '0') {
-          res == '0' && await session.send('已退出自助服务')
+        if (res == '0')
+        {
+          res == '0' && await session.send('已退出自助服务');
           break;
         }
-        if (res.toLowerCase() === 'q') {
-          proce.pop()
-        } else if (res.toLowerCase() === 'p') {
-          proce.length = 0
-        } else {
-          proce.push(res)
+        if (res.toLowerCase() === 'q')
+        {
+          proce.pop();
+        } else if (res.toLowerCase() === 'p')
+        {
+          proce.length = 0;
+        } else
+        {
+          proce.push(res);
           // 如果已经末尾
-          if (data.end) {
-            await session.send('已经到底了!')
-            proce.pop()
+          if (data.end)
+          {
+            await session.send('已经到底了!');
+            proce.pop();
           }
         }
       }
-    })
+    });
 }
