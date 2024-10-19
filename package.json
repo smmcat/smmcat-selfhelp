@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-smmcat-selfhelp",
   "description": "用户自助服务系统",
-  "version": "0.1.0",
+  "version": "0.2.2",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
