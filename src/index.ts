@@ -426,7 +426,7 @@ export function apply(ctx: Context, config: Config) {
             msg: goalItem.selectMenu.replace(/\\/g, '') +
               (goalItem.crumbs ? `\n\n[当前位置] ` +
                 `${goalItem.crumbs}` : '\n\n主菜单') +
-              '\n\nQ 上页\n\n0 退出',
+              '\n\nQ 上页\nP 首页\n0 退出',
             err: false,
             end: goalItem.end,
           };
