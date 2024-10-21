@@ -368,7 +368,7 @@ export function apply(ctx: Context, config: Config) {
           }
         }
       });
-      end || callback && callback({ selectMenu, title, lastPath: indePath.join('-'), change, crumbs: PathName.reverse().slice(-3).join('<'), end });
+      end || callback && callback({ selectMenu, title, lastPath: indePath.join('-'), change, crumbs: PathName.slice(-3).reverse().join('<'), end });
     },
     // 菜单渲染到界面
     markScreen(pathLine: string, session) {
